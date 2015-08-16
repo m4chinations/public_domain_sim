@@ -3,9 +3,18 @@
     height: 500px;
     display: block;
     margin: auto;
-    margin-top: 50px;
+    margin-top: 10px;
+    image-rendering: optimizeSpeed;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -o-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: optimize-contrast;
+    -ms-interpolation-mode: nearest-neighbor;
 }
 body {
     margin: auto;
     background-color: black;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
 }
