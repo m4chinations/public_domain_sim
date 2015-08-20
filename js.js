@@ -7,30 +7,38 @@ var SCORE = 0; //current score
 var COPYRIGHT_TERM = [28, 42, 56, 74, 95, 105]; //aka difficulty
 var CURRENT_TERM = 0; //index into the COPYRIGHT_TERM array
 
-var CWBMD;
+var CWBMD, CWBMDH;
 
-var WORK_SPEED = 60;
+var WORK_SPEED = 80;
 
 /* GROUPS */
 var BARS;
 var WORKS;
 var GOAL;
+var MAIN;
 var INTRO;
+var END;
 
 var GRIDX = 27.5;
 var GRIDY = 28;
 
-var SCORE_TEXT;
+var SCORE_TEXT, BOARD_TEXT;
 
 var BOARD = new Array(8);
 for (var i = 0; i < 8; i++) {
     BOARD[i] = new Array(15);
+}
+var BLOCKS = new Array(8);
+for (var i = 0; i < 8; i++) {
+    BLOCKS[i] = new Array(15);
 }
 
 var STATE = 'intro';
 
 
 var DEBUG = false;
+
+var DIFFICULTY = 0;
 
 
 
@@ -44,7 +52,10 @@ var block_sizes = [
     "xo\nxo\nxx",
     "x\nx\nx\nx",
     "oxo\nxxx",
-    "ox\nxx\nxo"
+    "ox\nxx\nxo",
+    "xo\nxx\nox",
+    "xo\nxx",
+    "xx\nox"
 ];
 
 //@@@@@@@@@@@@@@@@@@ PHASER FUNCTIONS @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -108,8 +119,17 @@ function update() {
     if (STATE == 'playing') {
         for (var i = 0; i < WORKS.length; i++) {
             var sprite = WORKS.getAt(i);
-            /* moving up */
-            if (sprite.x == 11 && sprite.y > 10) {
+            if (isCopyrighted(sprite)) {
+                sprite.inputEnabled = false;
+            } else {
+                sprite.inputEnabled = true;
+            }
+            if (sprite.input.isDragged) {
+                sprite.body.velocity.y = 0;
+                sprite.body.velocity.x = 0;
+                sprite.x = game.input.x - sprite.width / 2;
+                sprite.y = game.input.y - sprite.height / 2;
+            } else if (sprite.x == 11 && sprite.y > 10) { //moving up
                 sprite.x = 11;
                 sprite.body.velocity.y = -WORK_SPEED;
                 sprite.body.velocity.x = 0;
@@ -117,13 +137,8 @@ function update() {
                 sprite.y = 10;
                 sprite.body.velocity.x = WORK_SPEED;
                 sprite.body.velocity.y = 0;
-            } else if (sprite.y == 10 && sprite.x >= 240) {
-                //sprite.y = 10;
-                //sprite.body.velocity.x = 0;
-                //sprite.body.velocity.y = 0;
-            } else {
-                sprite.body.velocity.x = 0;
-                sprite.body.velocity.y = 0;
+            } else if (sprite.y == 10 && sprite.x >= 300) {
+                WORKS.remove(sprite, true);
             }
         }
         game.physics.arcade.overlap(WORKS, WORKS, collideWorks);
@@ -152,8 +167,10 @@ function popupMessage(messageNum) {
         });
     });
 }
-
+var TRANSITIONING = false;
 function transition(composer, toBeDestroyed) {
+    if (TRANSITIONING) return;
+    TRANSITIONING = true;
     var bmd = game.add.bitmapData(game.width, game.height);
     bmd.ctx.fillStyle = "black";
     bmd.ctx.fillRect(0, 0, game.width, game.height);
@@ -164,25 +181,68 @@ function transition(composer, toBeDestroyed) {
     sprite.alpha = 0;
     var composer = composer;
     game.add.tween(sprite).to({alpha: 1}, 2000, Phaser.Easing.Linear.None, true).onComplete.add(function() {
-        if (toBeDestroyed)
-            toBeDestroyed.destroy(true);
+        if (toBeDestroyed) {
+            if (toBeDestroyed instanceof Array) {
+                for (var i = 0; i < toBeDestroyed.length; i++) {
+                    toBeDestroyed[i].removeAll(true);
+                }
+            } else {
+                toBeDestroyed.removeAll(true);
+            }
+        }
         composer();
         sprite.bringToTop();
         game.add.tween(sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true).onComplete.add(function() {
             sprite.destroy();
+            TRANSITIONING = false;
         })
     });
 }
 
 
+function boardWorth() {
+    var worthScale = 0.05;
+    var score = 0;
+    var blockWorth = 10;
+    for (var i = 0; i < BOARD.length; i++) {
+        for (var j = 0; j < BOARD[i].length; j++) {
+            if (BOARD[i][j] && !BLOCKS[i][j]) {
+                score += Math.floor(blockWorth + score * worthScale);
+            }
+        }
+    }
+    if (checkWin())
+        score += 500000;
+    return score;
+}
+
+function sellBoard() {
+    SCORE += boardWorth();
+    SCORE_TEXT.text = "Score: " + SCORE;
+    BOARD_TEXT.text = "Board Worth: 0";
+    clearBoard();
+    DIFFICULTY += 5;
+    createGoalArea(DIFFICULTY);
+    HUEIDX++;
+
+}
+function clearBoard() {
+    for (var i = 0; i < BOARD.length; i++) {
+        for (var j = 0; j < BOARD[i].length; j++) {
+            BOARD[i][j] = false;
+            BLOCKS[i][j] = false;
+        }
+    }
+}
 function startGame() {
 
     STATE = 'playing';
+    MAIN = game.add.group();
 
     /* add background and scale it for retina*/
     var background = game.add.sprite(0, 0, 'background');
     background.scale.set(0.5, 0.5);
-
+    clearBoard();
 
 
     GOAL = game.add.group();
@@ -203,26 +263,129 @@ function startGame() {
     GRID.z = 5;
 
 
-    createGoalArea();
+    createGoalArea(0);
+    BOARD_TEXT = game.add.text(300, 500, "Board Worth: 0", { font: '14px Arial', fill: '#ffffff', align: 'right'});
+    BOARD_TEXT.anchor.x = 1;
+    SCORE_TEXT = game.add.text(300, 520, "Score: 0", { font: '14px Arial', fill: '#ffffff', align: 'right'});
+    SCORE_TEXT.anchor.x = 1;
+    MAIN.add(BOARD_TEXT);
+    MAIN.add(SCORE_TEXT);
+    MAIN.add(background);
 
-    SCORE_TEXT = game.add.text(73, 70, "Score: 0", { font: '12px Arial', fill: '#ffffff', align: 'left'});
 
     game.time.events.add(Phaser.Timer.SECOND * 30, function() {runGameEvent(0)}, this);
     workSpawner(WORKDELAY);
     //game.time.events.loop(Phaser.Timer.SECOND * 1, function() { if (Math.random() > 0.2) addBlockedBar(); }, this);
+    var sellButton = document.getElementById("sellBoard");
+    sellButton.style.display = 'block';
+
 }
 
-var WORKDELAY = Phaser.Timer.SECOND * 2;
+function isCopyrighted(sprite) {
+    if (sprite.x == 11 && sprite.y > 10) { //moving up
+        if (sprite.y > 450 - TIER * 20) return true;
+    } else if (sprite.y <= 10 && sprite.x < 240) { //moving to side
+        if (sprite.x < 70 + (TIER - 23) * 15) return true;
+    } else {
+        return false;
+    }
+}
+
+var WORKDELAY = Phaser.Timer.SECOND * 1;
 
 function workSpawner(delay) {
-    createWork();
-    game.time.events.add(delay, function() {workSpawner(WORKDELAY)}, this);
+    if (STATE == 'playing') {
+        createWork();
+        game.time.events.add(delay, function() {workSpawner(WORKDELAY)}, this);
+    }
 }
 
+function customBlock() {
+    //if the board is full just return a default block
+    if (checkWin()) return block_sizes[Math.floor(Math.random() * block_sizes.length)];
+
+    function pickCell() {
+        var x = Math.floor(Math.random() * BOARD.length);
+        var y = Math.floor(Math.random() * BOARD[0].length);
+        return [x, y];
+    }
+    var startingCell = pickCell();
+    while (BOARD[startingCell[0]][startingCell[1]])
+        startingCell = pickCell();
+
+
+    var cells = [startingCell];
+
+    var growthTenacity = 1.0; //percent chance of continuing to grow
+
+    function findAvailableSurroundingCells(cell) {
+        var availableCells = [];
+        function isOccupied(i, j) {
+            if (i >= BOARD.length || j >= BOARD[0].length || i < 0 || j < 0) return true;
+            for (var c = 0; c < cells.length; c++) {
+                if (cells[c][0] == i && cells[c][1] == j) return true;
+            }
+            return BOARD[i][j];
+        }
+        if (!isOccupied(cell[0] + 0, cell[1] + 1)) availableCells.push ( [cell[0] + 0, cell[1] + 1]);
+        if (!isOccupied(cell[0] + 1, cell[1] + 0)) availableCells.push ( [cell[0] + 1, cell[1] + 0]);
+        if (!isOccupied(cell[0] - 1, cell[1] + 0)) availableCells.push ( [cell[0] - 1, cell[1] + 0]);
+        if (!isOccupied(cell[0] + 0, cell[1] - 1)) availableCells.push ( [cell[0] + 0, cell[1] - 1]);
+
+        return availableCells;
+    }
+
+    var lastCell = startingCell;
+    while (Math.random() < growthTenacity) {
+        var availableCells = findAvailableSurroundingCells(lastCell);
+        if (availableCells.length > 0) {
+            lastCell = availableCells[Math.floor(Math.random() * availableCells.length)];
+        }
+        cells.push(lastCell);
+        growthTenacity -= 0.1;
+    }
+
+    /* generate string from cellform */
+    var minX = 20, minY = 20, maxX = 0, maxY = 0;
+    for (var c = 0; c < cells.length; c++) {
+        if (cells[c][0] < minX) {
+            minX = cells[c][0];
+        }
+        if (cells[c][0] > maxX) {
+            maxX = cells[c][0];
+        }
+        if (cells[c][1] < minY) {
+            minY = cells[c][1];
+        }
+        if (cells[c][1] > maxY) {
+            maxY = cells[c][1];
+        }
+    }
+    var string = "";
+    for (var y = minY; y <= maxY; y++) {
+        for (var x = minX; x <= maxX ; x++) {
+            var found = false;
+            for (var c = 0; c < cells.length; c++) {
+                if (cells[c][0] == x && cells[c][1] == y) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found)
+                string += "x";
+            else
+                string += "o";
+        }
+        string += '\n';
+    }
+    console.log(string, cells, minX, minY, maxX, maxY);
+    return string.slice(0, -1);
+
+}
 
 function createWork() {
 
-    var worksize = block_sizes[Math.floor(Math.random() * block_sizes.length)];
+    var worksize = Math.random() > 0.6 ? customBlock() : block_sizes[Math.floor(Math.random() * block_sizes.length)];
 
     /* calculate bitmap size of the block */
     workY = (worksize.match(/\n/g) || []).length + 1; //how many newlines does the block have
@@ -251,8 +414,6 @@ function createWork() {
     workHolder.draw(text, 24.25, 38);
     var scaledWorkX = ((workX * GRIDX) / (workY * GRIDY)) * 35;
     workHolder.draw(blockBmd, 24.25 - ( scaledWorkX / 2), 5, scaledWorkX, 35);
-
-
 
 
     var work = game.add.sprite(11, 442, workHolder);
@@ -293,25 +454,18 @@ function createWork() {
         }
     }, this);
 
-    work.events.onInputOver.add(function(sprite, pointer) {
-        /*if (Math.random() > 0.5)
-            sprite.loadTexture('spaceship2');
-        else
-            sprite.loadTexture('spaceship1');*/
-    }, this);
-    work.events.onInputOut.add(function(sprite, pointer) {
-        //sprite.loadTexture('workholder');
-    }, this);
-
     work.events.onInputDown.add(function(sprite, pointer) {
         sprite.loadTexture(sprite.block);
         sprite.x = pointer.x - sprite.width / 2;
         sprite.y = pointer.y - sprite.height / 2;
+        sprite.body.velocity.x = 0;
+        sprite.body.velocity.y = 0;
     }, this);
 
     return work;
 
 }
+
 
 
 function drawGrid() {
@@ -341,15 +495,40 @@ function drawGrid() {
     GRID.add(gridsprite);
 }
 
-function createGoalArea() {
+function drawBlockers(blockers) {
+    var bmd = GOAL.getAt(0).bmd;
+    var ctx = bmd.ctx;
+    var blockedCells = [];
+    function pickCell() {
+        var x = Math.floor(Math.random() * BOARD.length);
+        var y = Math.floor(Math.random() * BOARD[0].length);
+        return [x, y];
+    }
+
+    for (var i = 0; i < blockers; i++) {
+        var cell = pickCell();
+        /* find cell that isn't already blocked */
+        while (blockedCells.indexOf(cell) > -1)
+            cell = pickCell();
+
+        if (DEBUG) console.log("Drawing blocked cell at: ", cell, cell[0] * GRIDX, cell[1] * GRIDY, GRIDX, GRIDY);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(cell[0] * GRIDX, cell[1] * GRIDY, GRIDX, GRIDY);
+        BOARD[cell[0]][cell[1]] = true;
+        BLOCKS[cell[0]][cell[1]] = true;
+    }
+    GOAL.getAt(0).bmd.update();
+    GOAL.getAt(0).bmd.render();
+}
+
+function createGoalArea(blockers) {
+    GOAL.removeAll(true);
     var goal = game.add.bitmapData(220, 420, 'goal');
     var ctx = goal.ctx;
 
     /* draw the goal area */
-    ctx.beginPath();
-    ctx.rect(0, 0, 220, 420);
     ctx.fillStyle = '#AAABA9';
-    ctx.fill();
+    ctx.fillRect(0, 0, 220, 420);
 
     /* add goal area to game */
     var goalsprite = game.add.sprite(69, 68, goal);
@@ -359,20 +538,21 @@ function createGoalArea() {
     goalsprite.body.immovable = true; //it's not going to move though
     GOAL.add(goalsprite);
 
-
     drawGrid();
+    drawBlockers(blockers, goalsprite);
 }
 
 function tutorial() {
+    var TUT = game.add.group();
     var tutString = [
-        "you are an artist",
+        "you are building a new work",
         "",
-        "you make collages using other's works--",
-        "--you are remixing their work.",
-        "",
-        "today, you are making a rectangle filled with blocks",
-        "",
-        "drag other's works into the game area, and fill the entire rectangle."
+        "to build this work, you are taking inspiration from works in the public domain",
+        "blocks that are culturally relevant to your work will scroll by",
+        "drag the works onto your board",
+        "your board is worth more if it is complete",
+        "sell your board, and try to achieve a high score",
+        "before it's too late"
     ];
     var fontStyle = {
         font: 'bold 22px Times',
@@ -385,9 +565,9 @@ function tutorial() {
     tutorialText.anchor.x = 0.5;
     var index = 0;
     var line = '';
-
+    TUT.add(tutorialText);
     function done() {
-        transition(startGame, null);
+        transition(startGame, TUT);
     }
 
     function updateLine() {
@@ -403,7 +583,7 @@ function tutorial() {
         index++;
         if (index < tutString.length) {
             line = '';
-            game.time.events.repeat(80, tutString[index].length + 1, updateLine, this);
+            game.time.events.repeat(20, tutString[index].length + 1, updateLine, this);
         } else {
             done();
         }
@@ -413,12 +593,45 @@ function tutorial() {
 
 var TIER = 0;
 
+function horizCW(tiers) {
+    if (CWBMDH) {
+        CWBMDH.bmd.clear();
+        CWBMDH.update();
+    }
+    function generateCWLayer(tiers) {
+        var bmd = game.make.bitmapData(300, 70);
+        var final = game.make.bitmapData(300, 70);
+        var fontStyle = {
+            font: 'bold 22px Arial',
+        }
+        /* draw initial tier */
+        var cwText = game.make.text(0, 0, "©©©©", fontStyle);
+        cwText.angle = -90;
+        cwText.anchor.x = 0;
+        bmd.draw(cwText, 0, 70);
+        var copyRegion = new Phaser.Rectangle(5, 0, 300, 70);
+        for (var x = 0; x < tiers; x++) {
+            final.copyRect(bmd, copyRegion, 5 + x * 15, 5);
+        }
+        return final;
+    }
+    var bmd = generateCWLayer(tiers);
+    var sprite = game.add.sprite(65, 0, bmd);
+    sprite.bmd = bmd;
+    sprite.alpha = 0.5;
+    CWBMDH = sprite;
+}
+
 function increaseCWTerm(tiers) {
+    TIER = tiers;
+    if (tiers > 23) {
+        horizCW(tiers - 23);
+        tiers = 23;
+    }
     if (CWBMD) {
         CWBMD.bmd.clear();
         CWBMD.update();
     }
-
     function generateCWLayer(tiers) {
         var bmd = game.make.bitmapData(70, 550);
         var final = game.make.bitmapData(70, 550);
@@ -440,10 +653,35 @@ function increaseCWTerm(tiers) {
     sprite.bmd = bmd;
     sprite.alpha = 0.5;
     CWBMD = sprite;
-    TIER = tiers;
 }
 
+function endGame() {
+    STATE = 'end';
+    var endText = game.add.text(game.world.centerX, game.world.centerY - 130,
+        'The long copyright term prevents you from completing more works.\n Your Final Score Was: '+SCORE,
+        { font: "bold 24px monospace", fill: "white",wordWrap: true, wordWrapWidth: 250, align: 'center' }
+    );
+    endText.anchor.x = 0.5;
+    END = game.add.group();
+    END.add(endText);
 
+    var playAgain = game.add.text(game.world.centerX, game.world.centerY + 100,
+        'click to play again',
+        { font: "bold 18px monospace", fill: "white",wordWrap: true, wordWrapWidth: 250, align: 'center' }
+    );
+    playAgain.anchor.x = 0.5;
+    END.add(playAgain);
+    playAgain.alpha = 0;
+
+    var button = document.getElementById('sellBoard');
+    button.style.display = 'none';
+    playAgain.inputEnabled = true;
+    playAgain.events.onInputDown.add(function() {transition(startGame, END)});
+    game.time.events.add(Phaser.Timer.SECOND * 5, function() {
+        game.add.tween(playAgain).to({alpha: 1}, 1000, Phaser.Easing.Linear.None, true);
+    });
+
+}
 
 function collideWorks(work1, work2) {
     if (work1 == work2)
@@ -467,14 +705,14 @@ function collideWorks(work1, work2) {
 
 function setScore(newScore) {
     SCORE = newScore;
-    SCORE_TEXT.text = "Score: "+SCORE;
+    SCORE_TEXT.text = "Current Worth: "+SCORE;
 }
 
 function absoluteXYToBoard(position) {
     var boardXY = {};
     boardXY.x = Math.floor((position.x - 69) / GRIDX);
     boardXY.y = Math.floor((position.y - 68) / GRIDY);
-    console.log(position, boardXY);
+    if (DEBUG) console.log(position, boardXY);
     return boardXY;
 }
 
@@ -496,34 +734,29 @@ function score(sprite, location) {
             }
         }
     }
-    console.log(canPlace, BOARD);
+    if (DEBUG) console.log(canPlace, BOARD);
 
     if (canPlace) {
-        console.log(workRows);
+        if (DEBUG) console.log(workRows);
+        var worthBefore = boardWorth();
         for (var x = 0; x < workRows.length; x++) {
             for (var y = 0; y < workRows[x].length; y++) {
                 if (workRows[x].charAt(y) == 'x') {
-                    console.log("Setting to true: ", location.x + y, location.y + x, x, y);
+                    if (DEBUG) console.log("Setting to true: ", location.x + y, location.y + x, x, y);
                     BOARD[location.x + y][location.y + x] = true;
                 }
             }
         }
-        console.log("new board", BOARD);
+        if (DEBUG) console.log("new board", BOARD);
         //draw sprite onto goal area
         goal.bmd.update();
-        var bmdBefore = goal.bmd.pixels;
         //sprite.scale.set(0.71, 0.71);
         goal.bmd.draw(sprite, sprite.x - goal.x, sprite.y - goal.y, sprite.width, sprite.height, null, true);
         goal.bmd.update();
-        var bmdAfter = goal.bmd.pixels;
         goal.bmd.render();
-
-        var difference = 0;
-        for (var pixel = 0; pixel < bmdBefore.length; pixel++)
-            if (bmdBefore[pixel] != bmdAfter[pixel])
-                difference++;
-
-        displayCoolText("+"+difference, boardToAbsolute(location));
+        var worthAfter = boardWorth();
+        BOARD_TEXT.text = "Board Worth: "+boardWorth();
+        displayCoolText("+"+(worthAfter - worthBefore), boardToAbsolute(location));
         sprite.destroy();
         checkWin();
     } else {
@@ -534,42 +767,44 @@ function score(sprite, location) {
 var gameEvents = [
     [30, function() {
         popupMessage(2);
-        WORKDELAY = Phaser.Timer.SECOND * 10;
     }],
     [30, function() {
         increaseCWTerm(4);
         popupMessage(1);
-        WORKDELAY = Phaser.Timer.SECOND * 2;
     }],
     [60, function() {
         popupMessage(3);
-        WORKDELAY = Phaser.Timer.SECOND * 6;
     }],
     [60, function() {
         popupMessage(4);
-        WORKDELAY = Phaser.Timer.SECOND * 4;
     }],
     [60, function() {
         increaseCWTerm(10);
         popupMessage(5);
-        WORKDELAY = Phaser.Timer.SECOND * 3;
     }],
     [60, function() {
         popupMessage(3);
-        WORKDELAY = Phaser.Timer.SECOND * 5;
     }],
     [30, function() {
         increaseCWTerm(22);
         popupMessage(5);
-        WORKDELAY = Phaser.Timer.SECOND * 1;
-    }]
+    }],
+    [30, function() {
+        increaseCWTerm(30);
+        popupMessage(5);
+    }],
+    [60, function() {
+        increaseCWTerm(38);
+        transition(endGame, [BARS, WORKS, GOAL, GRID, MAIN]);
+    }],
+
 
 ]
 
 function runGameEvent(index) {
     gameEvents[index][1]();
-    if ((index + 2) < gameEvents.length) {
-        console.log("registering next game event for seconds: ", gameEvents[index+1][0])
+    if ((index + 1) < gameEvents.length) {
+        if (DEBUG) console.log("registering next game event for seconds: ", gameEvents[index+1][0])
         game.time.events.add(Phaser.Timer.SECOND * gameEvents[index+1][0], function() {runGameEvent(index+1)});
     }
 }
@@ -586,15 +821,14 @@ function checkWin() {
     for (var i = 0; i < BOARD.length; i++)
         for (var j = 0; j < BOARD[i].length; j++)
             if (!BOARD[i][j])
-                return;
-
-
-    console.log("YOU WON!");
+                return false;
+    return true;
 }
 
-
+var HUES = ['red', 'blue', 'purple', 'yellow', 'green', 'pink'];
+var HUEIDX = 0;
 function getRandomColor() {
-    return randomColor();
+    return randomColor({hue : HUES[HUEIDX]});
 }
 
 function displayCoolText(message, location) {
@@ -623,7 +857,7 @@ function intro() {
     game.add.tween(bg).to({y : -30, angle: -4, x : -50}, 50000, Phaser.Easing.Linear.None, true, 0, -1, true);
     game.add.tween(bg.scale).to({x: 1.2, y: 1.2}, 30000, Phaser.Easing.Linear.None, true, 0, -1, true);
     INTRO.add(bg); INTRO.add(heading); INTRO.add(text);
-    bg.inputEnabled = true; bg.events.onInputDown.add(function() {transition(tutorial, INTRO)}, this);
-    heading.inputEnabled = true; heading.events.onInputDown.add(function() {transition(tutorial, INTRO)}, this);
-    text.inputEnabled = true; text.events.onInputDown.add(function() {transition(tutorial, INTRO)}, this);
+    bg.inputEnabled = true; bg.events.onInputDown.add(function() {transition(startGame, INTRO)}, this);
+    heading.inputEnabled = true; heading.events.onInputDown.add(function() {transition(startGame, INTRO)}, this);
+    text.inputEnabled = true; text.events.onInputDown.add(function() {transition(startGame, INTRO)}, this);
 }

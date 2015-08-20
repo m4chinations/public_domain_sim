@@ -1,6 +1,6 @@
 #phaser-example {
     width: 300px;
-    height: 500px;
+    height: 550px;
     display: block;
     margin: auto;
     margin-top: 10px;
@@ -17,4 +17,16 @@ body {
     height: 100%;
     width: 100%;
     overflow: hidden;
+}
+
+#center {
+    width: 300px;
+    height: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+button {
+    margin-top: 5px;
+    float: right;
 }
