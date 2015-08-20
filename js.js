@@ -665,7 +665,7 @@ function endGame() {
     END = game.add.group();
     END.add(endText);
 
-    var playAgain = game.add.text(game.world.centerX, game.world.centerY + 100,
+    var playAgain = game.add.text(game.world.centerX, game.world.centerY + 150,
         'click to play again',
         { font: "bold 18px monospace", fill: "white",wordWrap: true, wordWrapWidth: 250, align: 'center' }
     );
@@ -857,7 +857,7 @@ function intro() {
     game.add.tween(bg).to({y : -30, angle: -4, x : -50}, 50000, Phaser.Easing.Linear.None, true, 0, -1, true);
     game.add.tween(bg.scale).to({x: 1.2, y: 1.2}, 30000, Phaser.Easing.Linear.None, true, 0, -1, true);
     INTRO.add(bg); INTRO.add(heading); INTRO.add(text);
-    bg.inputEnabled = true; bg.events.onInputDown.add(function() {transition(startGame, INTRO)}, this);
-    heading.inputEnabled = true; heading.events.onInputDown.add(function() {transition(startGame, INTRO)}, this);
-    text.inputEnabled = true; text.events.onInputDown.add(function() {transition(startGame, INTRO)}, this);
+    bg.inputEnabled = true; bg.events.onInputDown.add(function() {transition(tutorial, INTRO)}, this);
+    heading.inputEnabled = true; heading.events.onInputDown.add(function() {transition(tutorial, INTRO)}, this);
+    text.inputEnabled = true; text.events.onInputDown.add(function() {transition(tutorial, INTRO)}, this);
 }
